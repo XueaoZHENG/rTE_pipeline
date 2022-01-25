@@ -1,2 +1,5 @@
-# rTE_pipeline
 Calculation of regional translation efficiency
+
+The regional translation efficiency (rTE) refered to ribosome footprints per 30-bp windows throughout each mRNA (rTE = Count of Ribo-seq reads per 30-bp / Count of RNA-seq reads per 30-bp). 
+
+Ribo-seq reads were mapped with Bowtie (version 1.3.1; parameter: bowtie -x -a -p 20 -v 1 -q -S) to generate BAM files (Langmead et al., 2019). RNA-seq reads were mapped with Bowtie2 (version 2.4.4; parameter: bowtie2 -x -p 20 -q -S) to generate BAM files(Langmead and Salzberg, 2012). Then, the mapped Ribo-seq reads were counted and normalized with RNA-seq reads by Deeptools2 (version 2.5.1b; parameter: bamCompare --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 -b2 --operation ratio -o; computeMatrix reference-point --metagene --referencePoint TSS -p20 -S) to generate rTE matrix(Ramírez et al., 2016). The heatmap and dotplot were generated using pheatmap (version 1.0.12; https://cran.r-project.org/web/packages/pheatmap/index.html) and ggplot2 (version 3.3.4)  (Wickham, 2011), respectively. 
