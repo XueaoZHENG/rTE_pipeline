@@ -1,0 +1,403 @@
+###  S1 R bedtools 前处理 用于 deeptools 和 concor
+setwd("D:/BigData/2015cell_riboseq/00ref")
+rm(list=ls())
+library(Hmisc)
+library(corrplot)
+library(ggpmisc)
+library(ggpubr)
+library(ggplot2)
+library(ggthemes)
+library(psych)
+library(stringr)
+library(pheatmap)
+library(Rmisc)
+library(dplyr)
+
+df001 = read.delim ("D:/BigData/2015cell_riboseq/00ref/Saccharomyces_cerevisiae.R64-1-1.104.gtf",header = F)
+df002 = df001[df001$V3 == "transcript",]
+df002$V10 = str_extract(df002$V9,"(?<=(transcript_id ))(.*)(?=(\\; gene_name))")  #### R 的 正则表达式 提取 trancript id
+df002[is.na(df002$V10),"V10"] = str_extract(df002[is.na(df002$V10),"V9"],"(?<=(transcript_id ))(.*)(?=(\\; gene_source))") #### 补充NA的数值
+df002$V11 = str_extract(df002$V9,"(?<=(gene_id ))(.*)(?=(\\; transcript_id))")  #### R 的 正则表达式 提取 trancript id
+df002[is.na(df002$V10),"V10"] = str_extract(df002[is.na(df002$V10),"V9"],"(?<=(gene_id ))(.*)(?=(\\; gene_source))") #### 补充NA的数值
+df003 = read.delim ("D:/BigData/2015cell_riboseq/others/GSE67387_Scer_ribo_rawCounts/GSE67387_Scer_ribo_rawCounts.txt",row.names = 1)
+df004 = df003 %>% filter_all(all_vars(.>20))  ### 过滤掉所有 小于20的 reads
+df004$id = row.names(df004)
+df0023 = merge(df002,df004, by.x = "V11",by.y = "id")
+df005 = read.csv ("C:/Users/zhengxueao/OneDrive/og_data/sc_codon.csv ",header = T)
+df00235 = merge(df0023,df005, by.x = "V10",by.y = "ID")
+df00236 = arrange(df00235,-df00235$Total_aa)
+
+write.table(as.data.frame(df00236),"Sc_trans_fbed.tab",row.names = T,col.names = T,quote = F, sep = "\t")
+
+long21 = round(nrow(df00236)/5)
+long22 = round(nrow(df00236)*2/5)
+long23 = round(nrow(df00236)*3/5)
+long24 = round(nrow(df00236)*4/5)
+long25 = nrow(df00236)
+
+write.table(as.data.frame(df00236[,c("V1","V4","V5","V10")]),"Sc_trans_GTF_total.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+write.table(as.data.frame(df00236[1:long21,c("V1","V4","V5","V10")]),"Sc_trans_GTF_G1.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+write.table(as.data.frame(df00236[long21:long22,c("V1","V4","V5","V10")]),"Sc_trans_GTF_G2.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+write.table(as.data.frame(df00236[long22:long23,c("V1","V4","V5","V10")]),"Sc_trans_GTF_G3.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+write.table(as.data.frame(df00236[long23:long24,c("V1","V4","V5","V10")]),"Sc_trans_GTF_G4.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+write.table(as.data.frame(df00236[long24:long25,c("V1","V4","V5","V10")]),"Sc_trans_GTF_G5.bed",row.names = F,col.names = F,quote = F, sep = "\t")
+
+### S2 Linux bedtools 提取bam 文件
+ls -d *.rm.bam|while read id; do bedtools intersect -a $id -b ../../group_bed/Sc_trans_GTF_total.bed > $id.total.bam; done;\
+ls -d *total.bam|while read id; do samtools index -@ 48 $id; done;  ### 建立索引
+
+
+### S4 LINUX deeptools 生成MATRIX
+# 更换了 数据计算 参数--smoothLength 90：平滑数值 --pseudocount 0 将rna的reads 没测到的弄成0
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0  -b1 ribo/SRR1944912.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944924.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o WT-1RvsM-ratio.bw;\
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 ribo/SRR1944913.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944925.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o WT-2RvsM-ratio.bw;\
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 ribo/SRR1944914.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944926.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o WT-3RvsM-ratio.bw;\
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 ribo/SRR1944921.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944933.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o elp6ncs2-1RvsM-ratio.bw;\
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 ribo/SRR1944922.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944934.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o elp6ncs2-2RvsM-ratio.bw;\
+bamCompare --numberOfProcessors 48 --normalizeUsing None --binSize 30 --scaleFactorsMethod None --smoothLength 90 --pseudocount 0 -b1 ribo/SRR1944923.1_1.fastq.gz.sam.bam.rm.bam.total.bam -b2 rna/SRR1944935.1_1.fastq.gz.sam.bam.rm.bam.total.bam --operation ratio -o elp6ncs2-3RvsM-ratio.bw;\
+bigwigCompare --numberOfProcessors 48 -b1 WT-1RvsM-ratio.bw -b2 WT-2RvsM-ratio.bw --operation mean -o WT12_mean-ratio.bw;\
+bigwigCompare --numberOfProcessors 48 -b1 WT12_mean-ratio.bw -b2 WT-3RvsM-ratio.bw --operation mean -o WT123_mean-ratio.bw;\
+bigwigCompare --numberOfProcessors 48 -b1 elp6ncs2-1RvsM-ratio.bw -b2 elp6ncs2-2RvsM-ratio.bw --operation mean -o elp6ncs2_12_mean.bw;\
+bigwigCompare --numberOfProcessors 48 -b1 elp6ncs2_12_mean.bw -b2 elp6ncs2-3RvsM-ratio.bw --operation mean -o ncs2elp6_mean_ratio.bw;\
+computeMatrix reference-point --metagene --referencePoint TSS -p48 -S WT123_mean-ratio.bw -R 00ref/Saccharomyces_cerevisiae.R64-1-1.104.gtf -o WT_TSS_matrix_8000.gz -a 8000 -b 50 --nanAfterEnd;\
+computeMatrix reference-point --metagene --referencePoint TSS -p48 -S ncs2elp6_mean_ratio.bw -R 00ref/Saccharomyces_cerevisiae.R64-1-1.104.gtf -o ncs2elp6_TSS_matrix_8000.gz -a 8000 -b 50 --nanAfterEnd;\
+plotHeatmap -m WT_TSS_matrix_8000.gz -o WT_TSS_matrix.pdf --sortUsing region_length --colorMap jet --zMin 0 --zMax 4.5;\
+plotHeatmap -m ncs2elp6_TSS_matrix_8000.gz -o ncs2elp6_TSS_matrix.pdf --sortUsing region_length --colorMap jet --zMin 0 --zMax 4.5;
+
+### S5 R 数据清洗 及 热图可视化 (TSS)
+setwd("D:/BigData/2015cell_riboseq/20220116_yeast/deeptools")
+rm(list=ls())
+library(Hmisc)
+library(corrplot)
+library(ggpmisc)
+library(ggpubr)
+library(ggplot2)
+library(ggthemes)
+library(psych)
+library(stringr)
+library(pheatmap)
+library(Rmisc)
+
+# df0011 = read.delim ("WT_TSS_matrix_8000",header = F)
+df0011 = read.delim ("ncs2elp6_TSS_matrix_8000",header = F)
+
+df0011$type = str_extract(df0011$V4,"(?<=(\\_))(.*)")
+df0011=df0011[df0011$type  == "mRNA",]
+df0011=df0011[df0011$V1 !="Mito",]
+df0011=df0011[!is.na(df0011$V1),]
+df001 = read.csv ("C:/Users/zhengxueao/OneDrive/og_data/sc_codon.csv ",header = T)
+df0012 = merge(df0011,df001[,65:66],by.x="V4",by.y = "ID")
+df0012$NANO = apply(df0012,1,function(y) sum(is.na(y)))  ### 根据长度排序
+df0012 = arrange(df0012,-df0012$NANO)
+df0012 =df0012[df0012$NANO <= 800,]
+df0012 = arrange(df0012,-df0012$Total_aa)
+# write.table(df0012,file = "WT_TSS_matrix_5000_clean",row.names = F,col.names = F,quote = F, sep = "\t")  ###  ***
+write.table(df0012,file = "ncs2elp6_TSS_matrix_5000_clean",row.names = F,col.names = F,quote = F, sep = "\t")  ###  ***
+
+rm(list=ls())
+# df001_1 = read.delim ("WT_TSS_matrix_5000_clean",header = F)
+df001_1 = read.delim ("ncs2elp6_TSS_matrix_5000_clean",header = F)
+bk <- c(seq(0,5,by=0.25))
+pheatmap(df001_1[,7:811],
+         cluster_cols = FALSE,
+         cluster_rows = FALSE,
+         scale = "none",
+         border=FALSE,
+         # cellwidth = 50,
+         # cellheight = 25,
+         main = "",
+         color = colorRampPalette(c("#191970","yellow" ,"red"))(20), #### B2182B
+         cutree_cols = 2,
+         filename = "ncs2elp6_TSS_matrix_5000_clean_2.jpg",   ### ***
+         display_numbers = F,
+         breaks = bk,
+         show_colnames = F,
+         show_rownames = F,
+         width = 5,
+         height = 20
+)
+
+rm(list=ls())
+df001_1 = read.delim ("WT_TSS_matrix_5000_clean",header = F)
+# df001_1 = read.delim ("ncs2elp6_TSS_matrix_5000_clean",header = F)
+bk <- c(seq(0,5,by=0.25))
+pheatmap(df001_1[,7:811],
+         cluster_cols = FALSE,
+         cluster_rows = FALSE,
+         scale = "none",
+         border=FALSE,
+         # cellwidth = 50,
+         # cellheight = 25,
+         main = "",
+         color = colorRampPalette(c("#191970","yellow" ,"red"))(20), #### B2182B
+         cutree_cols = 2,
+         filename = "WT_TSS_matrix_5000_clean_2.jpg",   ### ***
+         display_numbers = F,
+         breaks = bk,
+         show_colnames = F,
+         show_rownames = F,
+         width = 5,
+         height = 20
+)
+
+
+### 20220122
+### 矩阵分组差异可视化 及 忽略NA的函数计算 (TSS)
+setwd("D:/BigData/2015cell_riboseq/20220116_yeast/deeptools")
+rm(list=ls())
+library(Hmisc)
+library(corrplot)
+library(ggpmisc)
+library(ggpubr)
+library(ggplot2)
+library(ggthemes)
+library(psych)
+library(stringr)
+library(pheatmap)
+library(Rmisc)
+
+df001 = read.delim ("ncs2elp6_TSS_matrix_5000_clean",header = F)
+df002 = read.delim ("WT_TSS_matrix_5000_clean",header = F)
+
+long11 = round(nrow(df001)/5)
+long12 = round(nrow(df001)*2/5)
+long13 = round(nrow(df001)*3/5)
+long14 = round(nrow(df001)*4/5)
+long15 = nrow(df001)
+df001$order = c(1:long15)
+
+df0011 = df001[df001$order < long11+1 & df001$order > 0,]
+df0011= stack(apply(df0011[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0012 = df001[df001$order < long12+1 & df001$order > long11,]
+df0012= stack(apply(df0012[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0013 = df001[df001$order < long13+1 & df001$order > long12,]
+df0013= stack(apply(df0013[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0014 = df001[df001$order < long14+1 & df001$order > long13,]
+df0014= stack(apply(df0014[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0015 = df001[df001$order < long15+1 & df001$order > long14,]
+df0015= stack(apply(df0015[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+
+long21 = round(nrow(df002)/5)
+long22 = round(nrow(df002)*2/5)
+long23 = round(nrow(df002)*3/5)
+long24 = round(nrow(df002)*4/5)
+long25 = nrow(df002)
+df002$order = c(1:long25)
+
+df0021 = df002[df002$order < long21+1 & df002$order > 0,]
+df0021= stack(apply(df0021[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0022 = df002[df002$order < long22+1 & df002$order > long21,]
+df0022= stack(apply(df0022[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0023 = df002[df002$order < long23+1 & df002$order > long22,]
+df0023= stack(apply(df0023[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0024 = df002[df002$order < long24+1 & df002$order > long23,]
+df0024= stack(apply(df0024[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+df0025 = df002[df002$order < long25+1 & df002$order > long24,]
+df0025= stack(apply(df0025[,7:811],2,function(y) sum(y[!is.na(y)])/length(y[!is.na(y)])))
+
+df0011$genotype = "Mut"
+df0012$genotype = "Mut"
+df0013$genotype = "Mut"
+df0014$genotype = "Mut"
+df0015$genotype = "Mut"
+df0011$ind = seq(1:nrow(df0011))
+df0012$ind = seq(1:nrow(df0012))
+df0013$ind = seq(1:nrow(df0013))
+df0014$ind = seq(1:nrow(df0014))
+df0015$ind = seq(1:nrow(df0015))
+
+df0021$genotype = "WT"
+df0022$genotype = "WT"
+df0023$genotype = "WT"
+df0024$genotype = "WT"
+df0025$genotype = "WT"
+df0021$ind = seq(1:nrow(df0021))
+df0022$ind = seq(1:nrow(df0022))
+df0023$ind = seq(1:nrow(df0023))
+df0024$ind = seq(1:nrow(df0024))
+df0025$ind = seq(1:nrow(df0025))
+
+df1 = rbind(df0011,df0021)
+df2 = rbind(df0012,df0022)
+df3 = rbind(df0013,df0023)
+df4 = rbind(df0014,df0024)
+df5 = rbind(df0015,df0025)
+
+df1$gro = "1"
+df2$gro = "2"
+df3$gro = "3"
+df4$gro = "4"
+df5$gro = "5"
+
+df12 = rbind(df1,df2)
+df123 = rbind(df12,df3)
+df1234 = rbind(df123,df4)
+df12345 = rbind(df1234,df5)
+
+df12345[df12345$ind == c(6,7,8,9,10) ,1 ]
+
+
+write.table(df0011,file = "mut.table",row.names = F,col.names = F,quote = F, sep = "\t")  ###  ***
+write.table(df0021,file = "WT.table",row.names = F,col.names = F,quote = F, sep = "\t")  ###  ***
+
+t.test(df0011$values,df0021$values)
+t.test(df0012$values,df0022$values)
+t.test(df0013$values,df0023$values)
+t.test(df0014$values,df0024$values)
+t.test(df0015$values,df0025$values)
+
+df12 = rbind(df1,df2)
+df123 = rbind(df12,df3)
+df1234 = rbind(df123,df4)
+df12345 = rbind(df1234,df5)
+
+df012 = df12345[df12345$ind == c(6,7,8,9,10),]
+
+my_comparisons=list(c("Mut","WT"))
+la_p3 = 4
+p <- ggplot(df012,aes(x=gro,y=values,fill=genotype)) +
+  geom_boxplot(outlier.colour = NA)+
+  labs( x= "", y = "",fill="") +
+  theme_classic() +
+  scale_fill_wsj('dem_rep') +
+  scale_y_continuous(limits=c(0, la_p3))+
+  guides(fill=FALSE)+
+  stat_compare_means(aes(group = genotype),comparisons = my_comparisons , method= "t.test",label = "p.format",label.y = la_p3*2/3)
+p
+ggsave("boxplot.pdf",width = 9,height =4.5)
+
+t.test(df012[df012$gro == "1" & df012$genotype == "Mut",1],df012[df012$gro == "1" & df012$genotype == "WT",1])
+t.test(df012[df012$gro == "2" & df012$genotype == "Mut",1],df012[df012$gro == "2" & df012$genotype == "WT",1])
+t.test(df012[df012$gro == "3" & df012$genotype == "Mut",1],df012[df012$gro == "3" & df012$genotype == "WT",1])
+t.test(df012[df012$gro == "4" & df012$genotype == "Mut",1],df012[df012$gro == "4" & df012$genotype == "WT",1])
+t.test(df012[df012$gro == "5" & df012$genotype == "Mut",1],df012[df012$gro == "5" & df012$genotype == "WT",1])
+
+P1 = ggplot(df1,aes(x=(ind-5)*10,y=values)) +
+      geom_point(aes(colour = genotype),size = 0.1)+
+      guides(color=F)+
+      # facet_grid(~sp,scales = "free")+
+      # scale_colour_gradient(low="red",high="blue")+
+      labs(
+        color=expression(),
+        size="",
+        x=""
+        # y="Pathway name",
+        # title="Pathway enrichment")
+      )+
+      theme_gdocs()+
+      scale_color_wsj('dem_rep') +
+      scale_y_continuous(limits=c(0,5))+
+      # stat_smooth(color = "black", fill = "lightgray")+
+      # stat_cor(method = "pearson")+
+      # stat_poly_eq(aes(label = paste(..eq.label.., ..adj.rr.label.., sep = '~~~~')), formula = y ~ x, parse = T) +
+      theme(
+        axis.text.y = element_text(size = rel(1.3)),
+        # axis.text.x = element_blank(),
+        axis.title.y = element_blank()
+      )
+P1
+
+P2 = ggplot(df2,aes(x=(ind-5)*10,y=values)) +
+      geom_point(aes(colour = genotype),size = 0.1)+
+      guides(color=F)+
+      # facet_grid(~sp,scales = "free")+
+      # scale_colour_gradient(low="red",high="blue")+
+      labs(
+        color=expression(),
+        size="",
+        x=""
+        # y="Pathway name",
+        # title="Pathway enrichment")
+      )+
+      theme_gdocs()+
+      scale_color_wsj('dem_rep') +
+      scale_y_continuous(limits=c(0,5))+
+      # stat_smooth(color = "black", fill = "lightgray")+
+      # stat_cor(method = "pearson")+
+      # stat_poly_eq(aes(label = paste(..eq.label.., ..adj.rr.label.., sep = '~~~~')), formula = y ~ x, parse = T) +
+      theme(
+        axis.text.y = element_text(size = rel(1.3)),
+        # axis.text.x = element_blank(),
+        axis.title.y = element_blank()
+      )
+P2
+
+P3 = ggplot(df3,aes(x=(ind-5)*10,y=values)) +
+      geom_point(aes(colour = genotype),size = 0.1)+
+      guides(color=F)+
+      # facet_grid(~sp,scales = "free")+
+      # scale_colour_gradient(low="red",high="blue")+
+      labs(
+        color=expression(),
+        size="",
+        x=""
+        # y="Pathway name",
+        # title="Pathway enrichment")
+      )+
+      theme_gdocs()+
+      scale_color_wsj('dem_rep') +
+      scale_y_continuous(limits=c(0,5))+
+      # stat_smooth(color = "black", fill = "lightgray")+
+      # stat_cor(method = "pearson")+
+      # stat_poly_eq(aes(label = paste(..eq.label.., ..adj.rr.label.., sep = '~~~~')), formula = y ~ x, parse = T) +
+      theme(
+        axis.text.y = element_text(size = rel(1.3)),
+        # axis.text.x = element_blank(),
+        axis.title.y = element_blank()
+      )
+P3
+
+P4 = ggplot(df4,aes(x=(ind-5)*10,y=values)) +
+      geom_point(aes(colour = genotype),size = 0.1)+
+      guides(color=F)+
+      # facet_grid(~sp,scales = "free")+
+      # scale_colour_gradient(low="red",high="blue")+
+      labs(
+        color=expression(),
+        size="",
+        x=""
+        # y="Pathway name",
+        # title="Pathway enrichment")
+      )+
+      theme_gdocs()+
+      scale_color_wsj('dem_rep') +
+      scale_y_continuous(limits=c(0,5))+
+      # stat_smooth(color = "black", fill = "lightgray")+
+      # stat_cor(method = "pearson")+
+      # stat_poly_eq(aes(label = paste(..eq.label.., ..adj.rr.label.., sep = '~~~~')), formula = y ~ x, parse = T) +
+      theme(
+        axis.text.y = element_text(size = rel(1.3)),
+        # axis.text.x = element_blank(),
+        axis.title.y = element_blank()
+      )
+P4
+
+P5 = ggplot(df5,aes(x=(ind-5)*10,y=values)) +
+      geom_point(aes(colour = genotype),size = 0.1)+
+      guides(color=F)+
+      # facet_grid(~sp,scales = "free")+
+      # scale_colour_gradient(low="red",high="blue")+
+      labs(
+        color=expression(),
+        size="",
+        x=""
+        # y="Pathway name",
+        # title="Pathway enrichment")
+      )+
+      theme_gdocs()+
+      scale_color_wsj('dem_rep') +
+      scale_y_continuous(limits=c(0,5))+
+      # stat_smooth(color = "black", fill = "lightgray")+
+      # stat_cor(method = "pearson")+
+      # stat_poly_eq(aes(label = paste(..eq.label.., ..adj.rr.label.., sep = '~~~~')), formula = y ~ x, parse = T) +
+      theme(
+        axis.text.y = element_text(size = rel(1.3)),
+        # axis.text.x = element_blank(),
+        axis.title.y = element_blank()
+      )
+P5
+
+p=list(P1,P2,P3,P4,P5)
+pdf(file = "MutvsWT_TSS.pdf",5,15) ### ***
+multiplot(plotlist = p[1:5], cols = 1)
+dev.off()
